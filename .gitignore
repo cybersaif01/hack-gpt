@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+.pytest_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Hack-GPT — NEVER COMMIT THESE
+~/.hackgpt/config.json
+config.json
+*.key
+*.pem
+*.p12
+secrets.json
+.env
+.env.*
+
+# Logs and workspace data
+hackgpt-workspace/
+*.log
+loot/
+creds/
+
+# IDE
+.vscode/
+.idea/
+*.swp
