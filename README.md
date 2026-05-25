@@ -1,4 +1,4 @@
-# Hack-GPT 🔐
+# Hack-GPT 
 
 > **Advanced Cybersecurity CLI AI Assistant** — like `shell-gpt`, but for pentesting.
 
@@ -23,7 +23,7 @@ Hack-GPT is a **CLI AI assistant for cybersecurity professionals**. You type a n
 
 ---
 
-## ⚡ Quick Install
+##  Quick Install
 
 ```bash
 # Clone and install
@@ -36,7 +36,7 @@ pip install -e .
 
 ---
 
-## 🔑 Setup API Key
+##  Setup API Key
 
 ```bash
 # Option 1: Store in config (recommended)
@@ -50,7 +50,7 @@ $env:OPENAI_API_KEY="sk-yourkey"       # PowerShell
 
 ---
 
-## 🚀 Usage Examples
+##  Usage Examples
 
 ### Run an Nmap scan and save to file
 ```
@@ -129,7 +129,7 @@ hackgpt --config set model llama3.2
 
 ---
 
-## 📁 Workspace Structure
+##  Workspace Structure
 
 For each target, Hack-GPT automatically creates:
 
@@ -150,7 +150,7 @@ For each target, Hack-GPT automatically creates:
 
 ---
 
-## 🛠️ Supported Tools
+##  Supported Tools
 
 Hack-GPT knows about and can use:
 
@@ -169,7 +169,7 @@ Hack-GPT knows about and can use:
 
 ---
 
-## 🔒 Safety Policy
+##  Safety Policy
 
 Hack-GPT **only operates within**:
 - TryHackMe / HackTheBox / VulnHub
@@ -184,7 +184,7 @@ It **refuses**:
 
 ---
 
-## 📋 All CLI Options
+##  All CLI Options
 
 ```
 hackgpt -chat "PROMPT"          Send prompt and execute commands
@@ -207,6 +207,6 @@ hackgpt --version               Show version
 
 ---
 
-## 📄 License
+##  License
 
 MIT License — Use responsibly and legally.
