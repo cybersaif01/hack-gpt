@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+hackgpt/__init__.py
+hackgpt/ai_engine.py
+hackgpt/cli.py
+hackgpt/config.py
+hackgpt/display.py
+hackgpt/history.py
+hackgpt/orchestrator.py
+hackgpt/shell_utils.py
+hackgpt/workspace.py
+hackgpt.egg-info/PKG-INFO
+hackgpt.egg-info/SOURCES.txt
+hackgpt.egg-info/dependency_links.txt
+hackgpt.egg-info/entry_points.txt
+hackgpt.egg-info/requires.txt
+hackgpt.egg-info/top_level.txt
