@@ -181,7 +181,9 @@ EXAMPLES:
   hackgpt -chat "run full recon on 10.10.10.5"
   hackgpt -chat "perform web fuzzing on http://target.htb"
   hackgpt -chat "analyze this PCAP: /tmp/capture.pcap"
+  hackgpt -chat "run sqlmap on http://target.htb/login" --force
   hackgpt --interactive
+  hackgpt --interactive --force
   hackgpt --config set api_key sk-yourkey
   hackgpt --config set model gpt-4o
   hackgpt --config show
@@ -191,6 +193,7 @@ EXAMPLES:
   hackgpt --session my-htb-box -chat "run recon"
   hackgpt --clear-history
   hackgpt --no-execute -chat "show me how to enumerate ldap"
+  hackgpt --force -chat "run hydra brute force"   # skip all confirmations
         """,
     )
 
@@ -280,6 +283,11 @@ EXAMPLES:
         "--sessions",
         action="store_true",
         help="List all saved sessions",
+    )
+    parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Skip all confirmation prompts (remove permission/root checks). Use with caution!",
     )
     parser.add_argument(
         "--version", "-v",
@@ -379,11 +387,13 @@ def main():
     # ── Chat mode ──
     if args.chat:
         prompt = " ".join(args.chat)
+        force = getattr(args, "force", False)
+
+        print_banner()  # Always show banner in chat mode
 
         # Validate API key is set before doing anything
         cfg = load_config()
         if not cfg.get("api_key"):
-            print_banner()
             print_error("No API key configured!")
             print()
             print_info("Quick setup — pick your provider:")
@@ -403,25 +413,27 @@ def main():
             print_info("Or run interactively: hackgpt --provider gemini")
             sys.exit(1)
 
-        orc = HackGPTOrchestrator(session_id=args.session)
+        orc = HackGPTOrchestrator(session_id=args.session, force=force)
         orc.run(
             prompt=prompt,
             target=args.target,
             output_file=args.output,
             no_execute=args.no_execute,
             no_stream=args.no_stream,
+            force=force,
         )
         return
 
     # ── Interactive mode ──
     if args.interactive:
+        force = getattr(args, "force", False)
         cfg = load_config()
         if not cfg.get("api_key"):
             print_banner()
             print_error("No API key configured!")
             print_info("Run: hackgpt --config set api_key sk-yourkey")
             sys.exit(1)
-        orc = HackGPTOrchestrator(session_id=args.session)
+        orc = HackGPTOrchestrator(session_id=args.session, force=force)
         orc.interactive_chat()
         return
 

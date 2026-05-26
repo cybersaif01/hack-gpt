@@ -7,6 +7,7 @@ import sys
 import platform
 import subprocess
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Tuple
 
 
@@ -66,8 +67,14 @@ def is_tool_available(name: str) -> bool:
 
 
 def check_tools(tool_list: list) -> dict:
-    """Return availability dict for a list of tools."""
-    return {t: is_tool_available(t) for t in tool_list}
+    """Return availability dict for a list of tools (parallel for speed)."""
+    results = {}
+    with ThreadPoolExecutor(max_workers=32) as executor:
+        futures = {executor.submit(is_tool_available, t): t for t in tool_list}
+        for future in as_completed(futures):
+            tool = futures[future]
+            results[tool] = future.result()
+    return results
 
 
 def run_command(
@@ -103,18 +110,23 @@ def run_command(
             env=exec_env,
             text=True,
             bufsize=1,
+            encoding="utf-8",
+            errors="replace",  # Handle binary/non-UTF8 output gracefully
         )
 
-        # Stream stdout
         if stream:
-            for line in proc.stdout:
-                sys.stdout.write(line)
-                sys.stdout.flush()
-                collected_stdout.append(line)
-            for line in proc.stderr:
-                sys.stderr.write(line)
-                sys.stderr.flush()
-                collected_stderr.append(line)
+            # Stream stdout and stderr concurrently using threads
+            def _drain_stream(pipe, collector, writer):
+                for line in pipe:
+                    writer.write(line)
+                    writer.flush()
+                    collector.append(line)
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                f_out = executor.submit(_drain_stream, proc.stdout, collected_stdout, sys.stdout)
+                f_err = executor.submit(_drain_stream, proc.stderr, collected_stderr, sys.stderr)
+                f_out.result()
+                f_err.result()
         else:
             out, err = proc.communicate(timeout=timeout)
             collected_stdout = [out] if out else []
@@ -150,21 +162,66 @@ def get_system_info() -> dict:
     os_type = detect_os()
     shell = detect_shell()
 
+    # Detect root / admin
+    try:
+        _is_root = os.geteuid() == 0
+    except AttributeError:
+        try:
+            import ctypes
+            _is_root = ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except Exception:
+            _is_root = False
+
     common_tools = [
-        "nmap", "rustscan", "masscan", "naabu",
-        "amass", "subfinder", "assetfinder",
-        "ffuf", "gobuster", "feroxbuster", "dirsearch",
-        "nuclei", "nikto", "sqlmap",
-        "hydra", "john", "hashcat",
-        "responder", "crackmapexec", "netexec",
-        "smbclient", "enum4linux",
-        "tcpdump", "wireshark", "tshark",
-        "whatweb", "wafw00f", "eyewitness",
-        "curl", "wget", "jq",
-        "python3", "python", "pip",
-        "git", "nc", "netcat",
-        "metasploit", "msfconsole",
-        "impacket-scripts",
+        # ─── Recon / Port Scanning ───
+        "nmap", "rustscan", "masscan", "naabu", "unicornscan", "zmap",
+        # ─── Subdomain / DNS ───
+        "amass", "subfinder", "assetfinder", "dnsx", "massdns",
+        "theHarvester", "recon-ng", "fierce", "dnsrecon", "dnsenum",
+        # ─── Web Fuzzing / Crawling ───
+        "ffuf", "gobuster", "feroxbuster", "dirsearch", "wfuzz",
+        "arjun", "hakrawler", "gau", "katana", "waybackurls",
+        # ─── Web Scanning ───
+        "nikto", "whatweb", "wafw00f", "nuclei", "wpscan", "joomscan",
+        "eyewitness", "aquatone",
+        # ─── Exploitation ───
+        "msfconsole", "metasploit", "msfvenom", "searchsploit",
+        "sqlmap", "xsstrike", "commix", "dalfox",
+        # ─── Password / Brute Force ───
+        "hydra", "medusa", "ncrack", "hashcat", "john",
+        "crackmapexec", "netexec", "kerbrute",
+        # ─── Network / Traffic ───
+        "tcpdump", "wireshark", "tshark", "bettercap", "ettercap",
+        "responder", "arpspoof",
+        # ─── SMB / AD ───
+        "smbclient", "enum4linux", "enum4linux-ng", "rpcclient",
+        "ldapdomaindump", "bloodhound-python", "crackmapexec",
+        # ─── OSINT ───
+        "sherlock", "holehe", "spiderfoot", "maltego",
+        # ─── Wireless ───
+        "aircrack-ng", "wifite", "kismet", "airodump-ng", "aireplay-ng",
+        # ─── Forensics ───
+        "volatility", "autopsy", "binwalk", "foremost", "exiftool",
+        "strings", "file", "xxd", "hexdump",
+        # ─── Privilege Escalation ───
+        "linpeas", "winpeas", "pspy",
+        # ─── Post Exploitation ───
+        "chisel", "ligolo", "socat", "ncat",
+        # ─── Impacket ───
+        "impacket-secretsdump", "impacket-psexec", "impacket-smbclient",
+        "impacket-wmiexec", "impacket-getTGT", "impacket-GetUserSPNs",
+        # ─── Cloud ───
+        "aws", "az", "gcloud", "pacu", "scoutsuite", "prowler", "trivy",
+        # ─── Container ───
+        "docker", "kubectl", "helm", "kube-hunter", "hadolint",
+        # ─── Mobile ───
+        "apktool", "jadx", "frida", "objection", "drozer",
+        # ─── Crypto / Misc ───
+        "openssl", "hashid", "steghide", "stegsolve", "zsteg",
+        # ─── General tools ───
+        "curl", "wget", "jq", "git", "nc", "netcat", "socat",
+        "python3", "python", "pip", "pip3", "ruby", "perl", "go",
+        "ssh", "scp", "rsync", "tmux", "screen",
     ]
 
     available = check_tools(common_tools)
@@ -181,4 +238,5 @@ def get_system_info() -> dict:
         "installed_tools": installed,
         "missing_tools": [t for t, ok in available.items() if not ok],
         "path": os.environ.get("PATH", ""),
+        "is_root": _is_root,
     }

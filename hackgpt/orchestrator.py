@@ -7,8 +7,22 @@ import os
 import re
 import sys
 import time
+import platform
 from pathlib import Path
 from typing import Optional
+
+
+def is_root() -> bool:
+    """Return True if running as root/admin."""
+    try:
+        return os.geteuid() == 0
+    except AttributeError:
+        # Windows — check for admin token
+        try:
+            import ctypes
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except Exception:
+            return False
 
 from hackgpt.config import load_config
 from hackgpt.shell_utils import run_command, detect_shell, get_system_info
@@ -101,24 +115,32 @@ def execute_commands(
     shell_type: str = "auto",
     confirm_destructive: bool = True,
     output_file: Optional[str] = None,
+    force: bool = False,
 ) -> list:
     """
     Execute a list of commands, stream output, handle confirmations.
     Returns list of (command, returncode, stdout) tuples.
+    force=True skips all confirmation prompts (--force flag).
     """
     if shell_type == "auto":
         shell_type = detect_shell()
 
+    _running_as_root = is_root()
     results = []
 
     for i, cmd in enumerate(commands):
         # Strip internal __CONFIRM__ prefix before display/execution
         clean_cmd = strip_confirm_marker(cmd)
+
+        # If running as root, strip unnecessary sudo prefixes
+        if _running_as_root and clean_cmd.strip().startswith("sudo "):
+            clean_cmd = clean_cmd.strip()[5:].strip()
+
         print_command(clean_cmd, index=i)
 
-        # Check if dangerous
-        if confirm_destructive and needs_confirmation(cmd):
-            print_warning(f"This command may be destructive or involve brute-force/exploitation.")
+        # Check if dangerous — force flag bypasses all prompts
+        if not force and confirm_destructive and needs_confirmation(cmd):
+            print_warning("This command may be destructive or involve brute-force/exploitation.")
             if not prompt_confirm("Proceed with this command?"):
                 print_info("Skipped by user.")
                 results.append((clean_cmd, -1, ""))
@@ -178,11 +200,16 @@ def execute_commands(
 # ─────────────────────────────────────────────────────────────────────────────
 
 class HackGPTOrchestrator:
-    def __init__(self, session_id: str = "default"):
+    def __init__(self, session_id: str = "default", force: bool = False):
         self.cfg = load_config()
         self.engine = HackGPTEngine()
         self.session_id = session_id
         self.shell_type = detect_shell()
+        self.force = force
+        if force:
+            self.cfg["confirm_destructive"] = False
+        if is_root():
+            print_info("[ROOT] Running as root — sudo stripping enabled, confirmations reduced.")
 
     def run(
         self,
@@ -191,6 +218,7 @@ class HackGPTOrchestrator:
         output_file: Optional[str] = None,
         no_execute: bool = False,
         no_stream: bool = False,
+        force: bool = False,
     ):
         """Full pipeline: AI → parse → execute → report."""
 
@@ -237,6 +265,7 @@ class HackGPTOrchestrator:
             output_file = detect_output_file(parsed["commands"], prompt)
 
         # Execute commands
+        _force = force or self.force
         if parsed["commands"] and not no_execute:
             print_section("Command Execution", color="green")
             results = execute_commands(
@@ -244,8 +273,9 @@ class HackGPTOrchestrator:
                 target=target,
                 session_id=self.session_id,
                 shell_type=self.shell_type,
-                confirm_destructive=self.cfg.get("confirm_destructive", True),
+                confirm_destructive=self.cfg.get("confirm_destructive", True) and not _force,
                 output_file=output_file,
+                force=_force,
             )
 
             # Feed results back as context for next turn
